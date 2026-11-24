@@ -1,0 +1,39 @@
+#!/bin/busybox sh
+# SPDX-License-Identifier: GPL-2.0
+# LFD430 labs - /init of the lab initramfs (QEMU targets).
+/bin/busybox --install -s
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm
+mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /tmp
+mount -t debugfs debugfs /sys/kernel/debug
+mount -t tracefs tracefs /sys/kernel/tracing 2>/dev/null
+hostname lfd430
+ip link set lo up
+
+# The lab repository, shared by the host with -virtfs (mount_tag "lab").
+mkdir -p /lab
+if mount -t 9p -o trans=virtio,version=9p2000.L,msize=512000 lab /lab; then
+	export LAB=/lab
+else
+	echo "init: /lab share not available (no -virtfs?)"
+fi
+
+# Unattended mode: lfd.run=<path relative to the repo> runs one script and
+# powers off.  Used by 'make qemu-test' and by CI.
+run=$(sed -n 's/.*lfd\.run=\([^ ]*\).*/\1/p' /proc/cmdline)
+if [ -n "$run" ]; then
+	echo "=== lfd: running /lab/$run"
+	cd "/lab/$(dirname "$run")" && sh "/lab/$run"
+	echo "=== lfd: exit status $?"
+	sync
+	poweroff -f
+fi
+
+cat /etc/motd
+cd /lab 2>/dev/null || cd /
+exec setsid cttyhack sh -l

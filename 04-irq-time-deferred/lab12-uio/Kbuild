@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-2.0
+# Lab 12 has no kernel module of its own: it drives the edu device from
+# user space through the in-tree uio_pci_generic driver.

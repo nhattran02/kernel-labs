@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-2.0
+# Lab 01: lfd_core.ko is built from two source files; lfd_dummy.ko uses it.
+#
+# TODO T1: Build the module lfd_core.ko from lfd_core_main.c and
+#   lfd_core_debugfs.c.  Kbuild syntax: "obj-m += <module>.o" names the
+#   module, "<module>-y := a.o b.o" lists the objects it is linked from.
+#   Until this is done, lfd_core.ko is simply not built.
+
+obj-m += lfd_dummy.o

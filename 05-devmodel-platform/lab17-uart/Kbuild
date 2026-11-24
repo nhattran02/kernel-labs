@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
+obj-m += lfd_uart.o
+# The "board file" that creates the COM2 platform device exists only on x86.
+# (Not obj-$(CONFIG_X86): that would give obj-y, i.e. built-in, which an
+# external module build silently ignores.)
+ifdef CONFIG_X86
+obj-m += lfd_uart_board.o
+endif

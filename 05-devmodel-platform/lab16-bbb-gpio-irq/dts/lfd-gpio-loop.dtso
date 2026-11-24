@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Lab 16 overlay for the BeagleBone Black (am335x-boneblack.dts, v6.12).
+ *
+ * Wiring: one jumper wire between header pins P8_12 and P8_14.
+ *   P8_12 = GPMC_AD12, mode 7 = gpio1_12  (output)
+ *   P8_14 = GPMC_AD10, mode 7 = gpio0_26  (input, interrupt)
+ * Pin-to-GPIO mapping: gpio-line-names in am335x-boneblack.dts; pad offsets
+ * and modes: include/dt-bindings/pinctrl/am33xx.h, am335x-regor.dtsi uses
+ * the same pads in mode 7; AM335x datasheet (SPRS717) pin attributes.
+ * Both pads are unused by the BBB's own devices (eMMC uses GPMC_AD0..7).
+ */
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/am33xx.h>
+
+&am33xx_pinmux {
+	lfd_loop_pins: lfd-loop-pins {
+		/*
+		 * TODO T1: Mux P8_12 as a GPIO output and P8_14 as a GPIO input
+		 *   (pull-down) with AM33XX_PADCONF(pad, conf, mode).
+		 *   Deck 05 slides 23-25; the pad names are in the header.
+		 */
+	};
+};
+
+&{/} {
+	lfd-gpio-loop {
+		compatible = "lfd430,gpio-loopback";
+		pinctrl-names = "default";
+		pinctrl-0 = <&lfd_loop_pins>;
+		/*
+		 * TODO T1: Describe the two GPIOs for the driver: out-gpios and
+		 *   in-gpios, both active high.  <&gpioN line flags>.
+		 */
+	};
+};

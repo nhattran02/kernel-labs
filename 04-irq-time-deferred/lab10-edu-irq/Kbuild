@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
+obj-m += lfd_edu_irq.o
+lfd_edu_irq-y := edu_glue.o edu_irq.o
+ccflags-y += -I$(src)/../../common/include

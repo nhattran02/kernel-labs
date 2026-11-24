@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Lab 17 part 2: give the AM335x UART1 (0x48022000, IRQ 73; disabled on the
+ * BeagleBone Black) to lfd_uart.  The tests use the UART's internal
+ * loopback (MCR bit 4), so no pin multiplexing or wiring is needed.
+ * UART1 sits below a "ti,sysc" interconnect target: the driver must take a
+ * runtime-PM reference before touching any register.
+ */
+/dts-v1/;
+/plugin/;
+
+&uart1 {
+	/*
+	 * TODO T7: Replace the compatible with "lfd430,am335x-uart", declare
+	 *   the 4-byte register spacing (reg-shift = <2>) and enable the
+	 *   node.  clock-frequency (48 MHz) is already in am33xx-l4.dtsi.
+	 */
+};

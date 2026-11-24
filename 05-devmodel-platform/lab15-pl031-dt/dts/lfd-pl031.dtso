@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Lab 15 overlay for QEMU's arm64 "virt" DT: hand the PL031 RTC to our
+ * driver.  QEMU's DT has no __symbols__, so the fragment targets the node
+ * by path instead of by label.
+ *
+ * Dropping "arm,primecell" matters: with it, the node becomes an AMBA
+ * device (drivers/amba) and is never offered to platform drivers.
+ */
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/pl031@9010000";
+		__overlay__ {
+			/*
+			 * TODO T1: Replace the compatible with "lfd430,pl031-lite"
+			 *   and add the standard boolean property wakeup-source.
+			 *   Deck 05 slides 23-26.
+			 */
+		};
+	};
+};

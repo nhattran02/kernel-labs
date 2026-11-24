@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# common/Makefile.module - shared rules for every lab directory.
+#
+# A lab directory contains:
+#   Kbuild     obj-m lines (read by the kernel build system)
+#   Makefile   sets USER_PROGS / QEMU_OPTS and includes this file
+#
+# Targets:
+#   make [TARGET=x86_64|arm64|bbb]   build modules and user programs
+#   make check       checkpatch.pl + sparse on this lab's sources
+#   make qemu        boot the QEMU guest (interactive), repo at /lab
+#   make qemu-test   build, then run test/run.sh in a fresh guest
+#   make install     TARGET=bbb: copy the lab to $(LFD_BBB_ROOTFS)/root/lfd430
+#   make clean
+
+LFD_REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
+include $(LFD_REPO)/env/lab.env
+
+TARGET ?= x86_64
+ifeq ($(TARGET),x86_64)
+  KARCH := x86
+  CROSS :=
+else ifeq ($(TARGET),arm64)
+  KARCH := arm64
+  CROSS := $(LFD_CROSS_arm64)
+else ifeq ($(TARGET),bbb)
+  KARCH := arm
+  CROSS := $(LFD_CROSS_bbb)
+else
+  $(error TARGET must be x86_64, arm64 or bbb)
+endif
+
+KDIR ?= $(LFD_KBUILD)/$(TARGET)
+LAB_REL := $(patsubst $(LFD_REPO)/%,%,$(CURDIR))
+# The x86_64 defconfig turns every warning into an error (CONFIG_WERROR).
+# Unfinished skeleton code produces "unused" warnings: keep those visible
+# but non-fatal.  Every other warning still stops the build.
+WIP_FLAGS := -Wno-error=unused-variable -Wno-error=unused-function \
+	     -Wno-error=unused-but-set-variable -Wno-error=unused-label
+KMAKE = $(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=$(KARCH) CROSS_COMPILE=$(CROSS) \
+	KCFLAGS="$(WIP_FLAGS)"
+
+USER_CC ?= $(CROSS)gcc
+USER_CFLAGS ?= -O2 -g -Wall -Wextra -Wno-unused-parameter -Wno-unused-result -static -pthread \
+	       -I$(LFD_REPO)/common/include -I$(CURDIR)/include
+USER_PROGS ?=
+EXTRA_PROGS ?=		# programs with their own rule in the lab Makefile
+QEMU_OPTS ?=
+
+.PHONY: all modules user clean check checkpatch sparse qemu qemu-test install
+
+all: modules user
+
+modules:
+ifeq ($(NO_MODULES),)
+	@test -f $(KDIR)/Module.symvers || \
+	  { echo "No built kernel in $(KDIR): run env/scripts/build-kernel.sh $(TARGET)"; exit 1; }
+	$(KMAKE) modules
+endif
+
+user: $(USER_PROGS) $(EXTRA_PROGS)
+
+$(USER_PROGS): %: %.c $(wildcard $(CURDIR)/include/*.h) $(LFD_REPO)/common/include/lfd_test.h
+	$(USER_CC) $(USER_CFLAGS) -o $@ $< $(USER_LDLIBS)
+
+clean:
+	$(if $(NO_MODULES),,-$(KMAKE) clean)
+	rm -f $(USER_PROGS) $(EXTRA_PROGS)
+
+CHECK_SRCS ?= $(wildcard *.c *.h)
+checkpatch:
+	$(LFD_KSRC)/scripts/checkpatch.pl --no-tree --terse --show-types \
+		--ignore SPDX_LICENSE_TAG -f $(CHECK_SRCS) || true
+
+# sparse >= 0.6.4 is needed for v6.12 headers; prefer the one built by
+# env/scripts/build-sparse.sh.
+SPARSE := $(firstword $(wildcard $(LFD_TOOLS)/bin/sparse) $(shell which sparse 2>/dev/null))
+sparse:
+	@test -n "$(SPARSE)" || { echo "no sparse: run env/scripts/build-sparse.sh"; exit 1; }
+	@$(SPARSE) --version | grep -Eq '^v?0\.6\.([4-9]|[1-9][0-9])|^v?(0\.[7-9]|[1-9])' || \
+	  echo "warning: $(SPARSE) is older than 0.6.4 and cannot parse v6.12 headers; run env/scripts/build-sparse.sh"
+	$(KMAKE) C=2 CHECK=$(SPARSE) CF="-D__CHECK_ENDIAN__" modules
+
+check: checkpatch sparse
+
+qemu: all
+	$(LFD_REPO)/env/scripts/run-qemu.sh $(QEMU_TARGET) $(QEMU_OPTS)
+
+qemu-test: all
+	$(LFD_REPO)/env/scripts/run-qemu.sh $(QEMU_TARGET) --run $(LAB_REL)/test/run.sh $(QEMU_OPTS)
+
+QEMU_TARGET := $(if $(filter arm64,$(TARGET)),arm64,x86_64)
+
+install: all
+	@test "$(TARGET)" = bbb || { echo "install is for TARGET=bbb"; exit 1; }
+	mkdir -p $(LFD_BBB_ROOTFS)/root/lfd430/$(LAB_REL) $(LFD_BBB_ROOTFS)/root/lfd430/common
+	cp -r $(CURDIR)/. $(LFD_BBB_ROOTFS)/root/lfd430/$(LAB_REL)/
+	cp $(LFD_REPO)/common/lib.sh $(LFD_BBB_ROOTFS)/root/lfd430/common/
+	@echo "on the board: cd /root/lfd430/$(LAB_REL)"
