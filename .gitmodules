@@ -1,0 +1,4 @@
+[submodule "linux-6.12"]
+	path = linux-6.12
+	url = https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+	shallow = true
