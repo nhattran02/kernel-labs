@@ -15,9 +15,18 @@ mount -t tracefs tracefs /sys/kernel/tracing 2>/dev/null
 hostname lfd430
 ip link set lo up
 
-# The lab repository, shared by the host with -virtfs (mount_tag "lab").
+# The lab repository: run-qemu.sh exports common/ and each [0-9]*/ lab
+# directory as its own 9p share; mount every tag at /lab/<tag>.
 mkdir -p /lab
-if mount -t 9p -o trans=virtio,version=9p2000.L,msize=512000 lab /lab; then
+n=0
+for f in /sys/bus/virtio/drivers/9pnet_virtio/virtio*/mount_tag; do
+	[ -r "$f" ] || continue
+	tag=$(tr -d '\000\n' < "$f")
+	mkdir -p "/lab/$tag"
+	mount -t 9p -o trans=virtio,version=9p2000.L,msize=512000 "$tag" "/lab/$tag" &&
+		n=$((n + 1))
+done
+if [ "$n" -gt 0 ]; then
 	export LAB=/lab
 else
 	echo "init: /lab share not available (no -virtfs?)"
