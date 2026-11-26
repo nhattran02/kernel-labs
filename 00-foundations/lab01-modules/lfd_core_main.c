@@ -26,7 +26,12 @@
  *   Give both a MODULE_PARM_DESC().  Deck 00, slide 28.
  */
 static unsigned int max_sensors = 8;
-bool lfd_core_verbose;
+module_param(max_sensors, uint, 0444); /* read-only */
+MODULE_PARM_DESC(max_sensors, "Maximum number of sensors (default 8)");
+
+bool lfd_core_verbose = false;
+module_param(lfd_core_verbose, bool, 0644); /* writable by root */
+MODULE_PARM_DESC(lfd_core_verbose, "Enable verbose logging (default no)");
 
 DEFINE_MUTEX(lfd_core_lock);
 LIST_HEAD(lfd_core_sensors);
@@ -48,8 +53,43 @@ int lfd_sensor_register(struct lfd_sensor *s)
 	 *   nr_sensors.  Log "registered sensor '<name>' from <module>"
 	 *   (module_name(s->owner)).  Single unlock path: use goto.
 	 */
-	return -ENOSYS;
+
+	struct lfd_sensor *pos;
+	int ret = 0;
+
+	if (!s || !s->name || !s->ops || !s->owner || !s->ops->read)
+		return -EINVAL;
+
+	mutex_lock(&lfd_core_lock);
+
+	/* Validate max_sensors */
+	if (nr_sensors >= max_sensors) {
+		ret = -ENOSPC;
+		goto err;
+	}
+
+	/* Ensure unique name */
+	list_for_each_entry(pos, &lfd_core_sensors, node) {
+		if (!strcmp(pos->name, s->name)) {
+			ret = -EEXIST;
+			goto err;
+		}
+	}
+
+	/* Add new sensor to list */
+	s->nreads = 0;
+	list_add_tail(&s->node, &lfd_core_sensors);
+	nr_sensors++;
+
+	pr_info("registered sensor '%s' from %s\n",
+		s->name, module_name(s->owner));
+
+err:
+	mutex_unlock(&lfd_core_lock);
+	return ret;
 }
+EXPORT_SYMBOL_NS_GPL(lfd_sensor_register, LFD430);
+
 /*
  * TODO T3: Export lfd_sensor_register, GPL-only, in namespace LFD430.
  *   v6.12 takes the namespace as a bare identifier; v6.13+ as a string.
@@ -64,7 +104,26 @@ int lfd_sensor_register(struct lfd_sensor *s)
 void lfd_sensor_unregister(struct lfd_sensor *s)
 {
 	/* TODO T3: Remove @s from the list under the lock and update the count. */
+	struct lfd_sensor *pos;
+
+	if (!s)
+		return;
+
+	mutex_lock(&lfd_core_lock);
+
+	list_for_each_entry(pos, &lfd_core_sensors, node) {
+		if (pos == s) {
+			list_del(&s->node);
+			nr_sensors--;
+			pr_info("unregistered sensor '%s'\n", s->name);
+			break;
+		}
+	}
+
+	mutex_unlock(&lfd_core_lock);
 }
+EXPORT_SYMBOL_NS_GPL(lfd_sensor_unregister, LFD430);
+
 /* TODO T3: Export lfd_sensor_unregister the same way. */
 
 static int __init lfd_core_init(void)
@@ -74,7 +133,8 @@ static int __init lfd_core_init(void)
 	ret = lfd_core_debugfs_init();
 	if (ret)
 		return ret;
-	pr_info("ready (max_sensors=%u)\n", max_sensors);
+	pr_info("ready (max_sensors=%u), (verbose=%s)\n", max_sensors, 
+						lfd_core_verbose ? "yes" : "no");
 	return 0;
 }
 

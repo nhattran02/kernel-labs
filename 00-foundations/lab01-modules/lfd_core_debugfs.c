@@ -24,6 +24,28 @@ static int sensors_show(struct seq_file *m, void *unused)
 	 *   pr_info() the value.  Why is it safe to call into another module
 	 *   here?  (Think about what lfd_sensor_unregister() must wait for.)
 	 */
+
+	struct lfd_sensor *pos;
+	int val, ret;
+
+	mutex_lock(&lfd_core_lock);
+
+	list_for_each_entry(pos, &lfd_core_sensors, node) {
+		ret = pos->ops->read(pos, &val);
+		pos->nreads++;
+
+		if (ret) {
+			seq_printf(m, "%-16s error %d\n", pos->name, ret);
+			if (READ_ONCE(lfd_core_verbose))
+				pr_info("%s: read error %d\n", pos->name, ret);
+		} else {
+			seq_printf(m, "%-16s %d\n", pos->name, val);
+			if (READ_ONCE(lfd_core_verbose))
+				pr_info("%s = %d\n", pos->name, val);
+		}
+	}
+
+	mutex_unlock(&lfd_core_lock);
 	return 0;
 }
 DEFINE_SHOW_ATTRIBUTE(sensors);
