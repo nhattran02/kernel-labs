@@ -145,23 +145,27 @@ static noinline int cmd_tag(const char *name, const char *tag)
 {
 	struct item *it;
 	char *t;
-	int ret = 0;
+	size_t tag_len = strlen(tag);
 
-	t = kstrdup(tag, GFP_KERNEL);
-	if (!t)
+	t = kmalloc(tag_len + 1, GFP_KERNEL);
+	if (!t) 
 		return -ENOMEM;
+
+	strcpy(t, tag);
 
 	mutex_lock(&items_lock);
 	it = find_item(name);
 	if (!it) {
-		ret = -ENOENT;
-		goto out;
+		mutex_unlock(&items_lock);
+		kfree(t);		
+		return -ENOENT;
 	}
-	kfree(it->tag);
+
+	if (it->tag) kfree(it->tag);
 	it->tag = t;
-out:
 	mutex_unlock(&items_lock);
-	return ret;
+
+	return 0;
 }
 
 static noinline int cmd_rename(const char *old, const char *new)
