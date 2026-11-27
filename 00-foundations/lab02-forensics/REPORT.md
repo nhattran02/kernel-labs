@@ -110,3 +110,42 @@ list, so only this function can reach it and no lock is needed.
 
 **Verification:** `test/run.sh` checks 8 and 9: no KASAN use-after-free,
 and the deletion is logged with the right name.
+
+## Report 4: BUG splat on the console on the first command
+
+**Evidence**
+```
+# sh test/repro.sh 4
+BUG: sleeping function called from invalid context at include/linux/sched/mm.h:321
+in_atomic(): 1, irqs_disabled(): 0, non_block: 0, pid: 1, name: sh
+preempt_count: 1, expected: 0
+2 locks held by sh/1:
+ #0: ff11000001acc3f8 (sb_writers#8){.+.+}-{0:0}, at: ksys_write+0xf5/0x1e0
+ #1: ffffffffc0408098 (stats_lock){+.+.}-{2:2}, at: record_command+0x16/0x120 [lfd_buggy]
+Call Trace:
+ __might_resched+0x2f8/0x510
+ __kmalloc_node_track_caller_noprof+0x346/0x470
+ krealloc_noprof+0x5f/0x120
+ record_command+0xb2/0x120 [lfd_buggy]
+ ctl_write+0x21a/0x260 [lfd_buggy]
+```
+
+**Tool:** `CONFIG_DEBUG_ATOMIC_SLEEP` with lockdep. The bug only hurts
+when the allocator really has to reclaim memory and sleeps, which manual
+testing never hits. `might_alloc()` (mm.h:321) warns whenever a
+`GFP_KERNEL` allocation *could* sleep in atomic context; lockdep names
+the lock that is held (`stats_lock`), and `preempt_count: 1` is that
+spinlock.
+
+**Root cause:** `lfd_buggy.c:59-61`. `record_command()` calls
+`krealloc(GFP_KERNEL)` while holding the `stats_lock` spinlock. Rule: do
+not sleep while holding a spinlock. It fires on the first command and
+then every 16th, when the history array grows.
+
+**Fix:** make `stats_lock` a mutex. Both users, `record_command()` (from
+`write()`) and `stats_show()` (from `read()`), run in process context,
+so nothing needs a spinlock. `GFP_ATOMIC` would only hide the warning and
+draw on the emergency reserves for a statistic.
+
+**Verification:** `test/run.sh` checks 10 and 11: no "sleeping function
+called from invalid context", and stats count every command.

@@ -46,9 +46,9 @@ static DEFINE_MUTEX(items_lock);	/* protects items and next_id */
 static int next_id = 1;
 
 /* Command history: one timestamp per handled command. */
-static DEFINE_SPINLOCK(stats_lock);
+static DEFINE_MUTEX(stats_lock);
 static unsigned long *history;
-static size_t history_len, history_cap;
+static size_t history_len, history_capacity;
 
 static struct dentry *dir;
 
@@ -56,17 +56,17 @@ static void record_command(void)
 {
 	unsigned long *h;
 
-	spin_lock(&stats_lock);
-	if (history_len == history_cap) {
-		h = krealloc(history, (history_cap + 16) * sizeof(*h), GFP_KERNEL);
+	mutex_lock(&stats_lock);
+	if (history_len == history_capacity) {
+		h = krealloc(history, (history_capacity + 16) * sizeof(*h), GFP_KERNEL);
 		if (h) {
 			history = h;
-			history_cap += 16;
+			history_capacity += 16;
 		}
 	}
-	if (history_len < history_cap)
+	if (history_len < history_capacity)
 		history[history_len++] = jiffies;
-	spin_unlock(&stats_lock);
+	mutex_unlock(&stats_lock);
 }
 
 /* Caller holds items_lock.  Returns NULL if there is no such item. */
@@ -244,9 +244,9 @@ static int stats_show(struct seq_file *m, void *v)
 {
 	size_t len;
 
-	spin_lock(&stats_lock);
+	mutex_lock(&stats_lock);
 	len = history_len;
-	spin_unlock(&stats_lock);
+	mutex_unlock(&stats_lock);
 	seq_printf(m, "commands %zu\n", len);
 	return 0;
 }
