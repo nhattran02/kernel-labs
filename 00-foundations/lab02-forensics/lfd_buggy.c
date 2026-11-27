@@ -181,6 +181,7 @@ static noinline int cmd_rename(const char *old, const char *new)
 	it = find_item(old);
 	if (!it) {
 		kfree(n);
+		mutex_unlock(&items_lock);
 		return -ENOENT;
 	}
 	kfree(it->name);

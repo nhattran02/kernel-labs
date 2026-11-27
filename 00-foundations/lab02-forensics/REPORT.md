@@ -149,3 +149,34 @@ draw on the emergency reserves for a statistic.
 
 **Verification:** `test/run.sh` checks 10 and 11: no "sleeping function
 called from invalid context", and stats count every command.
+
+## Report 5: all commands hang after a failed rename
+
+**Evidence**
+```
+# sh test/repro.sh 5
+================================================
+WARNING: lock held when returning to user space!
+------------------------------------------------
+sh/1 is leaving the kernel with locks still held!
+1 lock held by sh/1:
+ #0: ... (items_lock){+.+.}-{...}, at: cmd_rename+0x.../0x... [lfd_buggy]
+```
+The next command that needs `items_lock` (`echo 'add z' > ctl &`) never
+returns.
+
+**Tool:** lockdep. A missing unlock does not fail where it happens; the
+next caller just blocks forever and the hung-task detector only says
+who is waiting. Lockdep checks on every return to user space that no
+lock is still held, and names the lock and where it was taken.
+
+**Root cause:** `lfd_buggy.c:177-180`. The not-found path of
+`cmd_rename()` frees the new name and returns `-ENOENT` with
+`items_lock` still held. Rule: every exit path after `mutex_lock()` must
+unlock.
+
+**Fix:** unlock before returning `-ENOENT`.
+
+**Verification:** `test/run.sh` checks 14-16: rename of a missing item
+fails, later commands still work, and no "lock held when returning to
+user space".
