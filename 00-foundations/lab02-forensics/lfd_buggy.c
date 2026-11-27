@@ -121,11 +121,11 @@ static noinline int cmd_del(const char *name)
 	}
 	list_del(&it->node);
 	mutex_unlock(&items_lock);
+	pr_info("deleted %s (id %d)\n", it->name, it->id);
 
 	kfree(it->tag);
 	kfree(it->name);
 	kfree(it);
-	pr_info("deleted %s (id %d)\n", it->name, it->id);
 	return 0;
 }
 

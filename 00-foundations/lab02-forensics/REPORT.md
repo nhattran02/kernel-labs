@@ -80,3 +80,33 @@ of the neighbouring object.
 
 **Verification:** `test/run.sh` checks 6 and 7: no KASAN
 slab-out-of-bounds, and item `abcdefgh` is listed intact.
+
+## Report 3: garbage in the log after deleting
+
+**Evidence**
+```
+# sh test/repro.sh 3
+BUG: KASAN: slab-use-after-free in cmd_del+0x.../0x... [lfd_buggy]
+Read of size ... at addr ... by task sh/1
+ cmd_del+0x.../0x... [lfd_buggy]
+ ctl_write+0x.../0x... [lfd_buggy]
+Freed by task 1:
+ kfree+...
+ cmd_del+0x.../0x... [lfd_buggy]
+```
+The access and the free are in the same function, a few lines apart.
+
+**Tool:** KASAN. Without it the read returns whatever the allocator left
+in the freed object, so the log shows garbage instead of crashing. KASAN
+poisons freed objects and keeps them in quarantine, so the first read
+after `kfree()` is reported together with the alloc and free stacks.
+
+**Root cause:** `lfd_buggy.c:128`. `cmd_del()` prints `it->name` and
+`it->id` after `kfree(it->name)` and `kfree(it)`. Rule: never touch an
+object after freeing it.
+
+**Fix:** print the message before freeing. The item is already off the
+list, so only this function can reach it and no lock is needed.
+
+**Verification:** `test/run.sh` checks 8 and 9: no KASAN use-after-free,
+and the deletion is logged with the right name.
