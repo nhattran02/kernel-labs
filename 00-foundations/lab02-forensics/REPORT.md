@@ -180,3 +180,32 @@ unlock.
 **Verification:** `test/run.sh` checks 14-16: rename of a missing item
 fails, later commands still work, and no "lock held when returning to
 user space".
+
+## Report 6: the shell dies when looking up a missing item
+
+**Evidence**
+```
+# sh test/repro.sh 6
+Oops: general protection fault, probably for non-canonical address 0xdffffc0000000004: 0000 [#1] PREEMPT SMP KASAN NOPTI
+KASAN: null-ptr-deref in range [0x0000000000000020-0x0000000000000027]
+RIP: 0010:cmd_find+0xa9/0x130 [lfd_buggy]
+```
+`0xdffffc0000000004` is the KASAN shadow of address `0x20`
+(`(0x20 >> 3) + 0xdffffc0000000000`), and 0x20 is
+`offsetof(struct item, id)`: the code read `NULL->id`.
+
+**Tool:** the oops itself, decoded with KASAN and `faddr2line`. RIP gives
+the function and offset; KASAN turns the odd non-canonical address into
+the real range. Without KASAN the same bug shows as
+`BUG: kernel NULL pointer dereference, address: 0000000000000020`. The
+oops kills the current task, which is `sh`, PID 1 in the guest.
+
+**Root cause:** `lfd_buggy.c:140`. `cmd_find()` dereferences the result
+of `find_item()` without checking it, although `find_item()` returns
+NULL when there is no such item. Rule: check every lookup result before
+using it.
+
+**Fix:** return `-ENOENT` when the lookup fails.
+
+**Verification:** `test/run.sh` checks 12 and 13: no oops, and find on a
+missing item reports `ENOENT`.

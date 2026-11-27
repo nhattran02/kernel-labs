@@ -132,13 +132,16 @@ static noinline int cmd_del(const char *name)
 static noinline int cmd_find(const char *name)
 {
 	struct item *it;
-	int ret = 0;
 
 	mutex_lock(&items_lock);
 	it = find_item(name);
+	if (!it) {
+		mutex_unlock(&items_lock);
+		return -ENOENT;
+	}
 	mutex_unlock(&items_lock);
 	pr_info("%s has id %d\n", it->name, it->id);
-	return ret;
+	return 0;
 }
 
 static noinline int cmd_tag(const char *name, const char *tag)
