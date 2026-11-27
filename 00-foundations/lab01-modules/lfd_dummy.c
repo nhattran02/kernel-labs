@@ -25,7 +25,13 @@
  */
 static char *names[LFD_DUMMY_MAX] = { "temp0", "temp1" };
 static unsigned int nr_names = 2;
+module_param_array(names, charp, &nr_names, 0444); /* Read-only */
+MODULE_PARM_DESC(names, "Array of sensor names");
+
 static int base = 20;
+module_param(base, int, 0644);  /* Owner can read/write; group and others can read */
+MODULE_PARM_DESC(base, "The number for sensor value calculation");
+
 
 struct lfd_dummy {
 	struct lfd_sensor sensor;
@@ -55,12 +61,44 @@ static int __init lfd_dummy_init(void)
 	 *   i fails, unregister 0..i-1 and free everything before returning
 	 *   the error: a failed init must leave no trace.  Deck 00 slide 25.
 	 */
-	return -ENOSYS;
+	int ret, i, j;
+
+	if (!nr_names) 
+		return -EINVAL;
+
+	dummies = kcalloc(nr_names, sizeof(*dummies), GFP_KERNEL);
+	if (!dummies) 
+		return -ENOMEM;
+
+	for (i = 0; i < nr_names; i++) {
+		dummies[i].sensor.name = names[i];
+		dummies[i].sensor.ops = &dummy_ops;
+		dummies[i].sensor.owner = THIS_MODULE;
+		dummies[i].index = i;
+		
+		ret = lfd_sensor_register(&dummies[i].sensor);
+		if (ret)
+			goto err;
+	}
+
+	return 0;
+
+err:
+	for (j = 0; j < i; j++) {
+		lfd_sensor_unregister(&dummies[j].sensor);
+	}
+	kfree(dummies);
+	return ret;
 }
 
 static void __exit lfd_dummy_exit(void)
 {
 	/* TODO T5: Unregister every sensor, then free the array. */
+	int i;
+	for (i = 0; i < nr_names; i++) {
+		lfd_sensor_unregister(&dummies[i].sensor);
+	}	
+	kfree(dummies);
 }
 
 module_init(lfd_dummy_init);
@@ -70,3 +108,4 @@ module_exit(lfd_dummy_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("LFD430 labs");
 MODULE_DESCRIPTION("Fake sensors for lfd_core (LFD430 Lab 01)");
+MODULE_IMPORT_NS(LFD430);
