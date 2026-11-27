@@ -88,7 +88,7 @@ static noinline int cmd_add(const char *name)
 	it = kzalloc(sizeof(*it), GFP_KERNEL);
 	if (!it)
 		return -ENOMEM;
-	it->name = kmalloc(len, GFP_KERNEL);
+	it->name = kmalloc(len + 1, GFP_KERNEL);
 	if (!it->name) {
 		kfree(it);
 		return -ENOMEM;

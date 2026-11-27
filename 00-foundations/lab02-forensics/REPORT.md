@@ -45,3 +45,38 @@ ownership of it, and the previous tag is freed before it is replaced
 
 **Verification:** `test/run.sh` checks 4 and 5: tag on a missing item
 fails with `-ENOENT` and kmemleak finds no leak from lfd_buggy.
+
+## Report 2: random corruption after adding items
+
+**Evidence**
+```
+BUG: KASAN: slab-out-of-bounds in strcpy+0x9f/0xb0
+Write of size 1 at addr ff11000003283ac6 by task sh/83
+ strcpy+0x9f/0xb0
+ cmd_add+0xa1/0x340 [lfd_buggy]
+Allocated by task 83:
+ __kmalloc_noprof+0x199/0x480
+ cmd_add+0x6e/0x340 [lfd_buggy]
+The buggy address is located 0 bytes to the right of
+ allocated 6-byte region [ff11000003283ac0, ff11000003283ac6)
+```
+`add victim`: 6 bytes allocated for a 6-character name, then a 1-byte
+write just past the end. `scripts/faddr2line lfd_buggy.ko
+cmd_add+0xa1/0x340` points at the `strcpy()` line.
+
+**Tool:** KASAN. The overflow does not fault at the faulty write; it
+silently corrupts whatever follows, and the crash comes later somewhere
+unrelated. KASAN checks every access against shadow memory and reports
+at the exact write, with the allocation site.
+
+**Root cause:** `lfd_buggy.c:91`. `kmalloc(strlen(name))` leaves no room
+for the terminating NUL that `strcpy()` writes. Rule: a C string needs
+`strlen + 1` bytes. Without KASAN the NUL usually lands in the slack of
+the kmalloc-8/16/32 object; with a name of exactly 8, 16, 32...
+characters (`repro.sh 2` uses `abcdefgh`) it overwrites the first byte
+of the neighbouring object.
+
+**Fix:** allocate `len + 1` bytes.
+
+**Verification:** `test/run.sh` checks 6 and 7: no KASAN
+slab-out-of-bounds, and item `abcdefgh` is listed intact.
