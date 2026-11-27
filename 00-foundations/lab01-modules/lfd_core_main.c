@@ -57,7 +57,8 @@ int lfd_sensor_register(struct lfd_sensor *s)
 	struct lfd_sensor *pos;
 	int ret = 0;
 
-	if (!s || !s->name || !s->ops || !s->owner || !s->ops->read)
+	/* s->owner is NULL when the caller is built in (THIS_MODULE == NULL). */
+	if (!s || !s->name || !s->ops || !s->ops->read)	
 		return -EINVAL;
 
 	mutex_lock(&lfd_core_lock);
