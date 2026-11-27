@@ -8,9 +8,15 @@
 #   env/scripts/build-kernel.sh bbb             # BeagleBone Black
 #   env/scripts/build-kernel.sh x86_64 menuconfig
 #
-# The first run creates $LFD_KBUILD/<target>/.config from a defconfig plus
+# Every run regenerates $LFD_KBUILD/<target>/.config from a defconfig plus
 # the fragments in env/configs/, then checks that every option requested
-# by the fragments really ended up in .config.
+# by the fragments really ended up in .config.  So env/configs/*.config is
+# the source of truth: edit it, rerun, and the change is applied.  The build
+# itself stays incremental (Kbuild only recompiles what the change affects).
+#
+# Changes made with menuconfig are lost on the next run.  Copy them into the
+# fragment, or keep the current .config for one run with
+#   LFD_KEEP_CONFIG=1 env/scripts/build-kernel.sh x86_64
 set -euo pipefail
 . "$(dirname "$0")/common.sh"
 
@@ -37,7 +43,7 @@ bbb)	base=omap2plus_defconfig
 	images=(zImage modules dtbs) ;;
 esac
 
-if [ ! -f "$LFD_KOUT/.config" ]; then
+if [ ! -f "$LFD_KOUT/.config" ] || [ "${LFD_KEEP_CONFIG:-0}" != 1 ]; then
 	info "configuring $target: $base + ${frags[*]##*/}"
 	"${K[@]}" "$base"
 	ARCH=$LFD_ARCH CROSS_COMPILE=$LFD_CROSS \

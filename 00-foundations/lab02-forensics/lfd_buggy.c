@@ -46,9 +46,9 @@ static DEFINE_MUTEX(items_lock);	/* protects items and next_id */
 static int next_id = 1;
 
 /* Command history: one timestamp per handled command. */
-static DEFINE_SPINLOCK(stats_lock);
+static DEFINE_MUTEX(stats_lock);
 static unsigned long *history;
-static size_t history_len, history_cap;
+static size_t history_len, history_capacity;
 
 static struct dentry *dir;
 
@@ -56,17 +56,17 @@ static void record_command(void)
 {
 	unsigned long *h;
 
-	spin_lock(&stats_lock);
-	if (history_len == history_cap) {
-		h = krealloc(history, (history_cap + 16) * sizeof(*h), GFP_KERNEL);
+	mutex_lock(&stats_lock);
+	if (history_len == history_capacity) {
+		h = krealloc(history, (history_capacity + 16) * sizeof(*h), GFP_KERNEL);
 		if (h) {
 			history = h;
-			history_cap += 16;
+			history_capacity += 16;
 		}
 	}
-	if (history_len < history_cap)
+	if (history_len < history_capacity)
 		history[history_len++] = jiffies;
-	spin_unlock(&stats_lock);
+	mutex_unlock(&stats_lock);
 }
 
 /* Caller holds items_lock.  Returns NULL if there is no such item. */
@@ -88,7 +88,7 @@ static noinline int cmd_add(const char *name)
 	it = kzalloc(sizeof(*it), GFP_KERNEL);
 	if (!it)
 		return -ENOMEM;
-	it->name = kmalloc(len, GFP_KERNEL);
+	it->name = kmalloc(len + 1, GFP_KERNEL);
 	if (!it->name) {
 		kfree(it);
 		return -ENOMEM;
@@ -121,47 +121,54 @@ static noinline int cmd_del(const char *name)
 	}
 	list_del(&it->node);
 	mutex_unlock(&items_lock);
+	pr_info("deleted %s (id %d)\n", it->name, it->id);
 
 	kfree(it->tag);
 	kfree(it->name);
 	kfree(it);
-	pr_info("deleted %s (id %d)\n", it->name, it->id);
 	return 0;
 }
 
 static noinline int cmd_find(const char *name)
 {
 	struct item *it;
-	int ret = 0;
 
 	mutex_lock(&items_lock);
 	it = find_item(name);
+	if (!it) {
+		mutex_unlock(&items_lock);
+		return -ENOENT;
+	}
 	mutex_unlock(&items_lock);
 	pr_info("%s has id %d\n", it->name, it->id);
-	return ret;
+	return 0;
 }
 
 static noinline int cmd_tag(const char *name, const char *tag)
 {
 	struct item *it;
 	char *t;
-	int ret = 0;
+	size_t tag_len = strlen(tag);
 
-	t = kstrdup(tag, GFP_KERNEL);
-	if (!t)
+	t = kmalloc(tag_len + 1, GFP_KERNEL);
+	if (!t) 
 		return -ENOMEM;
+
+	strcpy(t, tag);
 
 	mutex_lock(&items_lock);
 	it = find_item(name);
 	if (!it) {
-		ret = -ENOENT;
-		goto out;
+		mutex_unlock(&items_lock);
+		kfree(t);		
+		return -ENOENT;
 	}
-	kfree(it->tag);
+
+	if (it->tag) kfree(it->tag);
 	it->tag = t;
-out:
 	mutex_unlock(&items_lock);
-	return ret;
+
+	return 0;
 }
 
 static noinline int cmd_rename(const char *old, const char *new)
@@ -177,6 +184,7 @@ static noinline int cmd_rename(const char *old, const char *new)
 	it = find_item(old);
 	if (!it) {
 		kfree(n);
+		mutex_unlock(&items_lock);
 		return -ENOENT;
 	}
 	kfree(it->name);
@@ -240,9 +248,9 @@ static int stats_show(struct seq_file *m, void *v)
 {
 	size_t len;
 
-	spin_lock(&stats_lock);
+	mutex_lock(&stats_lock);
 	len = history_len;
-	spin_unlock(&stats_lock);
+	mutex_unlock(&stats_lock);
 	seq_printf(m, "commands %zu\n", len);
 	return 0;
 }

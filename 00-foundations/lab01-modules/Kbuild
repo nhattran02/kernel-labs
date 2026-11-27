@@ -7,3 +7,5 @@
 #   Until this is done, lfd_core.ko is simply not built.
 
 obj-m += lfd_dummy.o
+obj-m += lfd_core.o
+lfd_core-y := lfd_core_debugfs.o lfd_core_main.o

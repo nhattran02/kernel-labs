@@ -21,8 +21,7 @@ sudo apt install build-essential git bc bison flex libelf-dev libssl-dev cpio \
      device-tree-compiler gdb-multiarch sparse dwarves python3 \
      gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf gcc-i686-linux-gnu
 # Do NOT install gcc-multilib: it conflicts with (removes) the ARM cross compilers.
-git clone --depth 1 --branch v6.12 \
-    https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git ~/lfd430/linux-6.12
+git submodule update --init --depth 1 linux-6.12   # Linux v6.12 -> ./linux-6.12
 env/scripts/build-kernel.sh x86_64 && env/scripts/build-busybox.sh x86_64 && env/scripts/mk-initramfs.sh x86_64
 env/scripts/build-kernel.sh arm64  && env/scripts/build-busybox.sh arm64 && env/scripts/mk-initramfs.sh arm64
 env/scripts/build-kernel.sh bbb && env/scripts/build-busybox.sh bbb \

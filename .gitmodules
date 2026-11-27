@@ -1,0 +1,5 @@
+[submodule "linux-6.12"]
+	path = linux-6.12
+	url = git@github.com:nhattran02/linux.git
+	shallow = true
+	branch = linux-6.12-labs

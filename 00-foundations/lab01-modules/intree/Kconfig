@@ -8,3 +8,19 @@
 #   default n, that depends on DEBUG_FS, with a help text of 2-3 lines.
 #   Then add a second tristate LFD430_DUMMY that depends on LFD430_CORE.
 #   Deck 00, slide 36 (Kconfig) and Documentation/kbuild/kconfig-language.rst
+
+config LFD430_CORE
+	tristate "LFD430 sensor registry"
+    depends on DEBUG_FS
+    default n
+	help 
+	  LFD430 sensor registry.
+	  Provides a registry for sensors and a debugfs interface
+	  to read their values.     
+
+config LFD430_DUMMY
+	tristate "LFD430 dummy sensors"
+	depends on LFD430_CORE
+	help
+      Registers dummy sensors with the LFD430 core.
+	  Useful for testing the sensor registry without hardware.

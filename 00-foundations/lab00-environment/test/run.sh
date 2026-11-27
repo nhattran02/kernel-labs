@@ -6,7 +6,8 @@ cd "$(dirname "$0")/.." || exit 1
 cfg() { zcat /proc/config.gz | grep -q "^$1=y"; }
 dmesg_reset
 check_grep "kernel is v6.12 built for the labs" "^6\.12\.[0-9]+-lfd430" uname -r
-check "/lab is the shared repository (9p)" grep -q " /lab 9p " /proc/mounts
+check "/lab/common is shared from the host (9p)" grep -q " /lab/common 9p " /proc/mounts
+check "/lab/00-foundations is shared from the host (9p)" grep -q " /lab/00-foundations 9p " /proc/mounts
 check "debugfs is mounted" test -d /sys/kernel/debug/tracing -o -d /sys/kernel/tracing
 check "the kernel configuration is available (/proc/config.gz)" test -e /proc/config.gz
 if [ "$(uname -m)" = x86_64 ]; then

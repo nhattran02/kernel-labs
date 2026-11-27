@@ -1,4 +1,4 @@
 
-  LFD430 labs - QEMU guest.  The lab repository is mounted at /lab.
+  LFD430 labs - QEMU guest.  The lab directories are mounted at /lab.
   Exit QEMU: type 'poweroff -f', or press Ctrl-A then X.
 

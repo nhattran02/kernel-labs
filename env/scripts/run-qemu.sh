@@ -1,7 +1,8 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0
 #
-# run-qemu.sh - boot the lab kernel in QEMU with the repository shared at /lab.
+# run-qemu.sh - boot the lab kernel in QEMU with common/ and the lab
+#                directories ([0-9]*/) shared at /lab.
 #
 #   env/scripts/run-qemu.sh [x86_64|arm64] [options] [-- extra QEMU args]
 #
@@ -63,8 +64,16 @@ rm -f "$mon"
 
 args=(-m "$mem" -smp "$smp" -no-reboot -display none
       -monitor "unix:$mon,server,nowait"
-      -virtfs "local,path=$LFD_REPO,mount_tag=lab,security_model=none,id=lab"
       -initrd "$initrd")
+# Share only what the guest needs: common/ and the lab directories
+# ([0-9]*/).  Each one is its own 9p export, mounted by /init at
+# /lab/<tag>; the kernel tree, kbuild/ and images/ stay on the host.
+n=0
+for d in "$LFD_REPO"/common "$LFD_REPO"/[0-9]*/; do
+	d=${d%/}
+	args+=(-virtfs "local,path=$d,mount_tag=${d##*/},security_model=none,id=lab$n")
+	n=$((n + 1))
+done
 if [ -n "$run" ]; then
 	args+=(-serial stdio)
 	# Keep pr_info() noise off the console; dmesg still has everything.
